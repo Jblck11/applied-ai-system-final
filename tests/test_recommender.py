@@ -1,4 +1,4 @@
-from src.recommender import Song, UserProfile, Recommender
+from src.recommender import Song, UserProfile, Recommender, score_song
 
 def make_small_recommender() -> Recommender:
     songs = [
@@ -59,3 +59,31 @@ def test_explain_recommendation_returns_non_empty_string():
     explanation = rec.explain_recommendation(user, song)
     assert isinstance(explanation, str)
     assert explanation.strip() != ""
+
+
+def test_score_song_rewards_closeness_to_target_energy():
+    user_prefs = {
+        "genre": "pop",
+        "mood": "happy",
+        "energy": 0.8,
+        "likes_acoustic": False,
+    }
+    matching_song = {
+        "genre": "pop",
+        "mood": "happy",
+        "energy": 0.8,
+        "acousticness": 0.2,
+    }
+    distant_song = {
+        "genre": "pop",
+        "mood": "happy",
+        "energy": 0.2,
+        "acousticness": 0.2,
+    }
+
+    matching_score, matching_reasons = score_song(user_prefs, matching_song)
+    distant_score, distant_reasons = score_song(user_prefs, distant_song)
+
+    assert matching_score > distant_score
+    assert "energy" in " ".join(matching_reasons).lower()
+    assert "energy" in " ".join(distant_reasons).lower()
