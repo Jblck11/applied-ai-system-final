@@ -58,14 +58,25 @@ def main() -> None:
     print(f"\nLoaded songs: {result['catalog_size']} usable"
           + (f" ({len(skipped)} skipped)" if skipped else ""))
     print("\nTop recommendations:\n")
+    flagged = 0
     for item in recommendations:
         song = item["song"]
         conf = item["confidence"]
         label = item["confidence_label"]
+        flag = "  REVIEW" if item["needs_review"] else ""
+        if item["needs_review"]:
+            flagged += 1
         print(
             f"{song['title']:<24} | Score: {item['score']:>5.2f} "
-            f"| Confidence: {conf:>4.2f} ({label:<6}) | {item['explanation']}"
+            f"| Confidence: {conf:>4.2f} ({label:<6}){flag:<8} | {item['explanation']}"
         )
+        if item["needs_review"]:
+            print(f"{'':<24}   -> flagged for review: {'; '.join(item['critique']['review_reasons'])}")
+
+    print(
+        f"\nSelf-critique: {len(recommendations) - flagged}/{len(recommendations)} "
+        f"recommendation(s) verified and trusted; {flagged} flagged for human review."
+    )
 
 
 if __name__ == "__main__":

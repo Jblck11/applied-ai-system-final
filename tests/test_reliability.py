@@ -11,6 +11,7 @@ from src.reliability import (
     RecommenderInputError,
     compute_match_signals,
     confidence_label,
+    critique_recommendation,
     score_confidence,
     validate_songs,
     validate_user_prefs,
@@ -160,3 +161,57 @@ def test_ranking_margin_raises_confidence():
 )
 def test_confidence_label_bands(value, expected):
     assert confidence_label(value) == expected
+
+
+# ---- self-critique / validation ---------------------------------------------
+
+PREFS = {"favorite_genre": "pop", "favorite_mood": "happy", "target_energy": 0.8}
+
+
+def test_truthful_explanation_is_verified_and_trusted():
+    song = _good_song(genre="pop", mood="happy", energy=0.8, acousticness=0.2)
+    explanation = (
+        "Score 4.96 because: genre match (+2.0), mood match (+1.0), "
+        "energy similarity (1.00), acoustic similarity (1.00)"
+    )
+    result = critique_recommendation(PREFS, song, explanation, confidence=0.95)
+    assert result["all_verified"] is True
+    assert result["needs_review"] is False
+    assert result["review_reasons"] == []
+
+
+def test_false_categorical_claim_is_caught():
+    # Data says genre does NOT match, but the explanation claims it does.
+    song = _good_song(genre="rock", mood="happy", energy=0.8, acousticness=0.2)
+    explanation = (
+        "Score 4.96 because: genre match (+2.0), mood match (+1.0), "
+        "energy similarity (1.00), acoustic similarity (1.00)"
+    )
+    result = critique_recommendation(PREFS, song, explanation, confidence=0.95)
+    assert result["all_verified"] is False
+    assert result["needs_review"] is True
+    assert any("genre" in c["name"] and not c["verified"] for c in result["checks"])
+
+
+def test_false_numeric_claim_is_caught():
+    # Energy similarity should be ~1.00, but the explanation understates it badly.
+    song = _good_song(genre="pop", mood="happy", energy=0.8, acousticness=0.2)
+    explanation = (
+        "Score 4.96 because: genre match (+2.0), mood match (+1.0), "
+        "energy similarity (0.10), acoustic similarity (1.00)"
+    )
+    result = critique_recommendation(PREFS, song, explanation, confidence=0.95)
+    assert result["all_verified"] is False
+    assert any("energy" in c["name"] and not c["verified"] for c in result["checks"])
+
+
+def test_low_confidence_forces_review_even_when_verified():
+    song = _good_song(genre="pop", mood="happy", energy=0.8, acousticness=0.2)
+    explanation = (
+        "Score 4.96 because: genre match (+2.0), mood match (+1.0), "
+        "energy similarity (1.00), acoustic similarity (1.00)"
+    )
+    result = critique_recommendation(PREFS, song, explanation, confidence=0.10)
+    assert result["all_verified"] is True
+    assert result["needs_review"] is True
+    assert any("low confidence" in r for r in result["review_reasons"])

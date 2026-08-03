@@ -14,6 +14,7 @@ Everything here is deterministic and fully offline: the same input always
 produces the same output, which is what makes the system reproducible.
 """
 
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 try:  # weights live with the scoring rule; import them so confidence stays in sync
@@ -271,3 +272,95 @@ def confidence_label(confidence: float) -> str:
     if confidence >= REVIEW_CONFIDENCE_THRESHOLD:
         return "medium"
     return "low"
+
+
+# -----------------------------------------------------------------------------
+# Self-critique / validation
+# -----------------------------------------------------------------------------
+# Before trusting an explanation, the system checks its own work: it re-derives
+# the ground truth from the raw data (compute_match_signals) and confirms that
+# every claim in the generated explanation is actually supported. Anything that
+# cannot be verified - or any low-confidence pick - is flagged for a human to
+# review rather than being presented as a confident recommendation. This is the
+# guardrail that makes the "act" step of the workflow trustworthy.
+
+def _extract_similarity(explanation: str, label: str) -> Optional[float]:
+    """Pull the numeric value out of e.g. 'energy similarity (0.98)'."""
+    match = re.search(rf"{label} similarity \(([0-9]*\.?[0-9]+)\)", explanation)
+    return float(match.group(1)) if match else None
+
+
+def critique_recommendation(
+    user_prefs: Dict[str, Any],
+    song: Dict[str, Any],
+    explanation: str,
+    confidence: float,
+) -> Dict[str, Any]:
+    """Verify an explanation's claims against independently recomputed signals.
+
+    Returns:
+        {
+          "checks": [{"name", "verified", "detail"}, ...],
+          "all_verified": bool,        # every claim matched the data
+          "needs_review": bool,        # should a human look before trusting it?
+          "review_reasons": [str, ...] # why it was flagged (empty if trusted)
+        }
+    """
+    signals = compute_match_signals(user_prefs, song)
+    checks: List[Dict[str, Any]] = []
+
+    def add_check(name: str, verified: bool, detail: str) -> None:
+        checks.append({"name": name, "verified": bool(verified), "detail": detail})
+
+    # --- categorical claims: does the explanation's match/mismatch wording
+    #     agree with the data? ("mismatch" is checked first because it is the
+    #     more specific phrase.) ---
+    for field, signal_key in (("genre", "genre_match"), ("mood", "mood_match")):
+        if f"{field} mismatch" in explanation:
+            claimed_match = False
+        elif f"{field} match" in explanation:
+            claimed_match = True
+        else:
+            claimed_match = None
+
+        actual_match = signals[signal_key] == 1.0
+        if claimed_match is None:
+            add_check(f"{field} claim", True, f"no {field} claim to verify")
+        else:
+            add_check(
+                f"{field} claim",
+                claimed_match == actual_match,
+                f"explanation says {'match' if claimed_match else 'mismatch'}; "
+                f"data says {'match' if actual_match else 'mismatch'}",
+            )
+
+    # --- numeric claims: does the stated similarity match the recomputed one? ---
+    for field, signal_key in (("energy", "energy_similarity"), ("acoustic", "acoustic_similarity")):
+        stated = _extract_similarity(explanation, field)
+        if stated is None:
+            add_check(f"{field} similarity", True, "no numeric claim to verify")
+            continue
+        expected = round(signals[signal_key], 2)
+        add_check(
+            f"{field} similarity",
+            abs(stated - expected) <= 0.011,  # explanation rounds to 2 decimals
+            f"explanation states {stated:.2f}; recomputed {expected:.2f}",
+        )
+
+    all_verified = all(check["verified"] for check in checks)
+
+    review_reasons: List[str] = []
+    if not all_verified:
+        failed = [c["name"] for c in checks if not c["verified"]]
+        review_reasons.append(f"unverified claim(s): {', '.join(failed)}")
+    if confidence < REVIEW_CONFIDENCE_THRESHOLD:
+        review_reasons.append(f"low confidence ({confidence:.2f} < {REVIEW_CONFIDENCE_THRESHOLD:.2f})")
+    if signals["completeness"] < 1.0:
+        review_reasons.append("incomplete song features")
+
+    return {
+        "checks": checks,
+        "all_verified": all_verified,
+        "needs_review": bool(review_reasons),
+        "review_reasons": review_reasons,
+    }

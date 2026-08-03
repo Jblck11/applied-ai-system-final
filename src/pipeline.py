@@ -18,6 +18,7 @@ try:  # package-style import (python -m src.main)
     from .reliability import (
         RecommenderInputError,
         confidence_label,
+        critique_recommendation,
         score_confidence,
         validate_songs,
         validate_user_prefs,
@@ -28,6 +29,7 @@ except ImportError:  # pragma: no cover - fallback for direct script execution
     from reliability import (
         RecommenderInputError,
         confidence_label,
+        critique_recommendation,
         score_confidence,
         validate_songs,
         validate_user_prefs,
@@ -78,6 +80,7 @@ def run_recommendation(user_prefs: Dict[str, Any], songs: List[Dict], k: int = 5
     for index, (song, score, explanation) in enumerate(full_ranked[:k]):
         next_best_score = full_ranked[index + 1][1] if index + 1 < len(full_ranked) else 0.0
         conf = score_confidence(user_prefs, song, score, next_best_score)
+        critique = critique_recommendation(user_prefs, song, explanation, conf["confidence"])
         recommendations.append(
             {
                 "song": song,
@@ -86,12 +89,23 @@ def run_recommendation(user_prefs: Dict[str, Any], songs: List[Dict], k: int = 5
                 "confidence": conf["confidence"],
                 "confidence_label": confidence_label(conf["confidence"]),
                 "confidence_breakdown": conf["breakdown"],
+                "critique": critique,
+                "needs_review": critique["needs_review"],
             }
         )
 
     if recommendations:
         avg_conf = sum(r["confidence"] for r in recommendations) / len(recommendations)
+        flagged = sum(1 for r in recommendations if r["needs_review"])
         logger.info("CONFIDENCE: average %.3f across %d recommendation(s).", avg_conf, len(recommendations))
+        logger.info("SELF-CRITIQUE: %d of %d recommendation(s) flagged for human review.", flagged, len(recommendations))
+        for rec in recommendations:
+            if not rec["critique"]["all_verified"]:
+                logger.warning(
+                    "SELF-CRITIQUE: '%s' has unverified claim(s): %s",
+                    rec["song"].get("title", "?"),
+                    "; ".join(c["detail"] for c in rec["critique"]["checks"] if not c["verified"]),
+                )
 
     return {
         "recommendations": recommendations,
