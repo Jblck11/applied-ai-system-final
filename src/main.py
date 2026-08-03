@@ -60,7 +60,12 @@ def main() -> None:
     print("\nTop recommendations:\n")
     for item in recommendations:
         song = item["song"]
-        print(f"{song['title']:<24} | Score: {item['score']:>5.2f} | {item['explanation']}")
+        conf = item["confidence"]
+        label = item["confidence_label"]
+        print(
+            f"{song['title']:<24} | Score: {item['score']:>5.2f} "
+            f"| Confidence: {conf:>4.2f} ({label:<6}) | {item['explanation']}"
+        )
 
 
 if __name__ == "__main__":

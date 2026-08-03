@@ -15,11 +15,23 @@ from typing import Any, Dict, List
 
 try:  # package-style import (python -m src.main)
     from .recommender import recommend_songs
-    from .reliability import RecommenderInputError, validate_songs, validate_user_prefs
+    from .reliability import (
+        RecommenderInputError,
+        confidence_label,
+        score_confidence,
+        validate_songs,
+        validate_user_prefs,
+    )
     from .logging_setup import get_logger
 except ImportError:  # pragma: no cover - fallback for direct script execution
     from recommender import recommend_songs
-    from reliability import RecommenderInputError, validate_songs, validate_user_prefs
+    from reliability import (
+        RecommenderInputError,
+        confidence_label,
+        score_confidence,
+        validate_songs,
+        validate_user_prefs,
+    )
     from logging_setup import get_logger
 
 
@@ -57,18 +69,29 @@ def run_recommendation(user_prefs: Dict[str, Any], songs: List[Dict], k: int = 5
         )
     logger.info("VALIDATE-CATALOG: %d song(s) usable.", len(valid_songs))
 
-    ranked = recommend_songs(user_prefs, valid_songs, k=k)
-    logger.info("RANK: produced %d recommendation(s).", len(ranked))
+    # Rank the *whole* catalog so each recommendation's confidence can measure
+    # how decisively it beat the next-best song, not just the songs shown.
+    full_ranked = recommend_songs(user_prefs, valid_songs, k=len(valid_songs))
+    logger.info("RANK: scored %d song(s); returning top %d.", len(full_ranked), k)
 
     recommendations: List[Dict[str, Any]] = []
-    for song, score, explanation in ranked:
+    for index, (song, score, explanation) in enumerate(full_ranked[:k]):
+        next_best_score = full_ranked[index + 1][1] if index + 1 < len(full_ranked) else 0.0
+        conf = score_confidence(user_prefs, song, score, next_best_score)
         recommendations.append(
             {
                 "song": song,
                 "score": score,
                 "explanation": explanation,
+                "confidence": conf["confidence"],
+                "confidence_label": confidence_label(conf["confidence"]),
+                "confidence_breakdown": conf["breakdown"],
             }
         )
+
+    if recommendations:
+        avg_conf = sum(r["confidence"] for r in recommendations) / len(recommendations)
+        logger.info("CONFIDENCE: average %.3f across %d recommendation(s).", avg_conf, len(recommendations))
 
     return {
         "recommendations": recommendations,

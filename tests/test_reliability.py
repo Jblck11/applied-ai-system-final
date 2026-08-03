@@ -7,7 +7,11 @@ in later commits.
 import pytest
 
 from src.reliability import (
+    MAX_SCORE,
     RecommenderInputError,
+    compute_match_signals,
+    confidence_label,
+    score_confidence,
     validate_songs,
     validate_user_prefs,
 )
@@ -91,3 +95,68 @@ def test_empty_catalog_raises():
 def test_all_invalid_catalog_raises():
     with pytest.raises(RecommenderInputError):
         validate_songs([_good_song(genre=""), _good_song(mood="")])
+
+
+# ---- match signals ----------------------------------------------------------
+
+def test_match_signals_perfect_match():
+    prefs = {"favorite_genre": "pop", "favorite_mood": "happy", "target_energy": 0.8}
+    signals = compute_match_signals(prefs, _good_song(energy=0.8, acousticness=0.2))
+    assert signals["genre_match"] == 1.0
+    assert signals["mood_match"] == 1.0
+    assert signals["energy_similarity"] == pytest.approx(1.0)
+    assert signals["acoustic_similarity"] == pytest.approx(1.0)
+    assert signals["completeness"] == 1.0
+
+
+def test_match_signals_mismatch():
+    prefs = {"favorite_genre": "rock", "favorite_mood": "sad", "target_energy": 0.1}
+    signals = compute_match_signals(prefs, _good_song(genre="pop", mood="happy", energy=0.9))
+    assert signals["genre_match"] == 0.0
+    assert signals["mood_match"] == 0.0
+    assert signals["energy_similarity"] < 0.5
+
+
+# ---- confidence scoring -----------------------------------------------------
+
+def test_confidence_is_bounded():
+    prefs = {"favorite_genre": "pop", "favorite_mood": "happy", "target_energy": 0.8}
+    out = score_confidence(prefs, _good_song(), score=MAX_SCORE, next_best_score=0.0)
+    assert 0.0 <= out["confidence"] <= 1.0
+    assert set(out["breakdown"]) == {
+        "match_strength",
+        "ranking_margin",
+        "signal_agreement",
+        "completeness",
+    }
+
+
+def test_strong_decisive_match_beats_weak_narrow_match():
+    prefs = {"favorite_genre": "pop", "favorite_mood": "happy", "target_energy": 0.8}
+
+    strong = score_confidence(
+        prefs, _good_song(energy=0.8, acousticness=0.2), score=4.9, next_best_score=2.0
+    )
+    weak = score_confidence(
+        prefs,
+        _good_song(genre="jazz", mood="sad", energy=0.1),
+        score=1.9,
+        next_best_score=1.85,
+    )
+    assert strong["confidence"] > weak["confidence"]
+
+
+def test_ranking_margin_raises_confidence():
+    prefs = {"favorite_genre": "pop", "favorite_mood": "happy", "target_energy": 0.8}
+    song = _good_song()
+    decisive = score_confidence(prefs, song, score=4.0, next_best_score=1.0)
+    narrow = score_confidence(prefs, song, score=4.0, next_best_score=3.95)
+    assert decisive["confidence"] > narrow["confidence"]
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [(0.9, "high"), (0.75, "high"), (0.6, "medium"), (0.5, "medium"), (0.3, "low"), (0.0, "low")],
+)
+def test_confidence_label_bands(value, expected):
+    assert confidence_label(value) == expected
