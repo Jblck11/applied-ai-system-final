@@ -1,0 +1,50 @@
+%% Applied AI System — Music Recommender (extended) — Architecture (Mermaid source)
+%% Base project: AI110 Module 3 "Music Recommender Simulation".
+%% Preview/export at https://mermaid.live — paste this file's contents.
+%% This is the REQUIRED source file. A PNG export (assets/) is optional.
+%%
+%% NOTE: Solid nodes = the current Module-3 system as cloned.
+%%       Dashed nodes = the planned final-project AI extension (not yet built).
+
+flowchart TD
+    U([User taste profile<br/>genre &bull; mood &bull; target energy &bull; likes acoustic]):::user
+    CSV[("data/songs.csv<br/>song catalog")]:::data
+
+    subgraph CORE["Recommender Core &mdash; src/recommender.py"]
+        direction TB
+        L["load_songs()<br/>parse catalog"] --> S["_score_song()<br/>weighted match:<br/>genre + mood + energy + acoustic"]
+        S --> RK["recommend()<br/>rank &rarr; top-K"]
+        RK --> EX["explain_recommendation()<br/>plain-English reasons"]
+    end
+
+    subgraph UI["Interface &mdash; src/main.py (CLI)"]
+        OUT[/"Ranked recommendations<br/>+ score + explanation"/]:::out
+    end
+
+    subgraph TESTS["Verification &mdash; tests/test_recommender.py"]
+        T["pytest unit tests<br/>scoring &bull; ranking &bull; edge cases"]:::test
+    end
+
+    %% Current data flow: input -> process -> output
+    U --> L
+    CSV --> L
+    EX --> OUT
+    OUT --> U
+
+    %% Where testing checks the AI results
+    T -. "asserts against" .-> S
+    T -. "asserts against" .-> RK
+
+    %% ---- Planned final-project extension (AI feature) ----
+    RK -. planned .-> RET["Retriever (RAG)<br/>fetch song/artist facts"]:::planned
+    RET -. planned .-> GEN["LLM explanation<br/>grounded in retrieved facts"]:::planned
+    GEN -. planned .-> CRIT["Self-critique + validation<br/>check claims vs. data"]:::planned
+    CRIT -. planned .-> CONF["Confidence score<br/>0.0&ndash;1.0 per recommendation"]:::planned
+    CONF -. "feeds richer output" .-> OUT
+    CRIT -. "low confidence -> flag" .-> HUMAN{{"Human / test review<br/>of flagged results"}}:::planned
+
+    classDef user fill:#e8f0fe,stroke:#4285f4,color:#111;
+    classDef data fill:#e6f4ea,stroke:#34a853,color:#111;
+    classDef out fill:#f3e8fd,stroke:#a142f4,color:#111;
+    classDef test fill:#fef7e0,stroke:#f9ab00,color:#111;
+    classDef planned fill:#f1f3f4,stroke:#9aa0a6,color:#5f6368,stroke-dasharray:5 5;
