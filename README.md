@@ -109,16 +109,6 @@ python -m pytest
 > On some Windows setups `python` opens the Microsoft Store; use `py` instead
 > (e.g. `py -m src.main`).
 
-## Demo Walkthrough (optional)
-
-A video walkthrough is optional. If you record one, paste the link here:
-
-> 🎥 **Loom walkthrough:** _`<add your Loom URL here, or delete this section>`_
-
-The reproducible console captures in
-[`docs/sample_runs.md`](docs/sample_runs.md) demonstrate the system's behavior
-without a video.
-
 ## Sample Interactions
 
 Full, unedited captures live in [`docs/sample_runs.md`](docs/sample_runs.md).
