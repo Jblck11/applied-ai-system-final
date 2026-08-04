@@ -50,6 +50,11 @@ behind. The Mermaid source is in
 [`diagrams/architecture.mmd`](diagrams/architecture.mmd) (rendered with a legend
 in [`diagrams/README.md`](diagrams/README.md)).
 
+![VibeFinder system architecture](assets/architecture.png)
+
+*(Rendered from [`diagrams/architecture.mmd`](diagrams/architecture.mmd); the
+interactive version below renders natively on GitHub.)*
+
 ```mermaid
 flowchart LR
     U([User taste profile]) --> V["Guardrails<br/>validate input + catalog<br/>(reliability.py)"]
@@ -103,6 +108,16 @@ python -m pytest
 
 > On some Windows setups `python` opens the Microsoft Store; use `py` instead
 > (e.g. `py -m src.main`).
+
+## Demo Walkthrough (optional)
+
+A video walkthrough is optional. If you record one, paste the link here:
+
+> 🎥 **Loom walkthrough:** _`<add your Loom URL here, or delete this section>`_
+
+The reproducible console captures in
+[`docs/sample_runs.md`](docs/sample_runs.md) demonstrate the system's behavior
+without a video.
 
 ## Sample Interactions
 

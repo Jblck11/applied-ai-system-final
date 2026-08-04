@@ -3,7 +3,9 @@
 Dedicated directory for **system architecture images** and other static media
 referenced by the project README.
 
-- Export the architecture diagram from [`../diagrams/architecture.mmd`](../diagrams/architecture.mmd)
-  (via <https://mermaid.live> → *Actions → PNG*) and save it here, e.g. `architecture.png`.
-- The Mermaid **source file** in `../diagrams/` is the canonical, required version.
-  A PNG here is only for convenient embedding in the README.
+- [`architecture.png`](architecture.png) — the current export of the system
+  architecture, embedded in the main README.
+- It is rendered from [`../diagrams/architecture.mmd`](../diagrams/architecture.mmd),
+  which is the canonical, required source. To refresh the PNG after editing the
+  diagram, re-export from <https://mermaid.live> (*Actions → PNG*) and overwrite
+  this file.
